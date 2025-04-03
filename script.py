@@ -25,10 +25,14 @@ def close_connection(connection: MailBox) -> bool:
         print(f"Error closing connection: {e}")
         return False
         
-def new_emails_uids(connection: MailBox) -> List[str]:
+def new_emails_uids(connection: MailBox, last_received_uid: str) -> List[str]:
     new_mail_uids = []
+           
     
     try:
+        if last_received_uid:
+            connection.select("INBOX")
+            connection.search(AND(seen=False, int(uid)>int(last_received_uid)))
         for msg in connection.fetch():
             new_mail_uids.append(msg.uid)
             print(f"New email UID: {msg.uid}")
@@ -38,7 +42,7 @@ def new_emails_uids(connection: MailBox) -> List[str]:
         print(f"Error checking for new emails: {e}")
         return []
     
-def pull_emails(connection: MailBox, uids: List[str]) -> Mapping | None:
+def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
     pulled_emails = {}
     print(uids)
     try:
@@ -61,6 +65,7 @@ def pull_emails(connection: MailBox, uids: List[str]) -> Mapping | None:
 
 def parse_email(email: Mapping) -> List[str]:
     markdowned = []
+    
     for m in email.keys():
         markdowned_msg = "# Nowa wiadomość e-mail \n"
         markdowned_msg += f"## Temat: {email[m]['subject']}\n"
@@ -72,28 +77,49 @@ def parse_email(email: Mapping) -> List[str]:
         markdowned_msg += f"## Treść:\n {email[m]['body']}\n"
         if len(email[m]['attachments']) > 0:
             markdowned_msg += f"### Ten email zawiera załączniki.\n"
+            
         markdowned.append(markdowned_msg)
-        print(markdowned_msg)
+        #print(markdowned_msg)
     return markdowned
     
 def send_to_discord(markdowned: List[str]) -> bool:
     for mail in markdowned:
-        webhook = DiscordWebhook(os.environ.get("WEBHOOK_URL"), content=mail)
-        response = webhook.execute()
+        try:
+            webhook = DiscordWebhook(os.environ.get("WEBHOOK_URL"), content=mail)
+            response = webhook.execute()
+            print(f"Messages sent to Discord: {response.status_code}")
+            return True
+        
+        except Exception as e:
+            print(f"Error sending to Discord: {e}")
+            return False
 
     
 def main():
-    connection = establish_connection()
-    uids = new_emails_uids(connection)
-    if not uids:
-        print("No new emails found.")
-        close_connection(connection)
-        return
-    emails = pull_emails(connection, uids)
-    close_connection(connection)
-    markdowned = parse_email(emails)
-    send_to_discord(markdowned)
+    last_received_uid = None
+    while True:
+        connection = establish_connection()
+        if not connection:
+            print("Failed to establish connection.")
+            continue
         
+        uids = new_emails_uids(connection, last_received_uid)
+        if not uids:
+            print("No new emails found.")
+            close_connection(connection)
+            continue
+        
+        emails = pull_emails(connection, uids)
+        close_connection(connection)
+        if len(emails) == 0:
+            print("No emails to process.")
+            continue
+        markdowned = parse_email(emails)
+
+        if not send_to_discord(markdowned):
+            print("Failed to send emails to Discord.")
+            continue
+        last_received_uid = uids[-1]
 
 if __name__ == "__main__":
     main()
