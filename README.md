@@ -19,7 +19,6 @@ Docker image will be provided later
 To use this script, you need to provide the following environment variables:
 
 - `MAILBOX_NUMBER` – number of mailboxes to forward  
-  > Note: Mailbox IDs should be in the range `[0 .. MAILBOX_NUMBER - 1]` instead of `<id>` placeholder.  
 
 For each mailbox (replace `<id>` with the actual mailbox index):  
 - `ADDRESS_<id>` – your mailbox address  
