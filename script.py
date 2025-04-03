@@ -1,6 +1,7 @@
 import os
 from typing import List, Mapping
 from time import sleep
+from datetime import datetime
 from dotenv import load_dotenv
 from imap_tools import MailBox, AND, MailMessageFlags
 from discord_webhook import DiscordWebhook
@@ -13,7 +14,7 @@ def establish_connection(credentials: map) -> MailBox | None:
         connection = MailBox(credentials["mail_url"]).login(credentials["address"], credentials["password"])
         return connection
     except Exception as e:
-        print(f"Error establishing connection: {e}")
+        print(f"{datetime.now()} Error establishing connection: {e}")
         return None
  
     
@@ -22,7 +23,7 @@ def close_connection(connection: MailBox) -> bool:
         connection.logout()
         return True
     except Exception as e:
-        print(f"Error closing connection: {e}")
+        print(f"{datetime.now()} Error closing connection: {e}")
         return False
  
         
@@ -32,11 +33,11 @@ def new_emails_uids(connection: MailBox) -> List[str]:
     try:
         for msg in connection.fetch(AND(seen=False)):
             new_mail_uids.append(msg.uid)
-            print(f"New email UID: {msg.uid}")
+            print(f"{datetime.now()} New email UID: {msg.uid}")
         return new_mail_uids
     
     except Exception as e:
-        print(f"Error checking for new emails: {e}")
+        print(f"{datetime.now()} Error checking for new emails: {e}")
         return []
 
     
@@ -58,7 +59,7 @@ def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
         return pulled_emails
     
     except Exception as e:
-        print(f"Error pulling emails: {e}")
+        print(f"{datetime.now()} Error pulling emails: {e}")
         return None
 
 
@@ -100,21 +101,25 @@ def send_to_discord(markdowned: List[str], uids: List[str], webhook_url: str) ->
 
 
 def refresh_mailbox(credentials: map) -> None:
+        print(f"\n\n{datetime.now()} Start processing mailbox {credentials["address"]}")
         connection = establish_connection(credentials)
         if not connection:
-            print("Failed to establish connection.")
+            print(f"{datetime.now()} Failed to establish connection.")
+            print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
         uids = new_emails_uids(connection)
         if not uids:
-            print("No new emails found.")
+            print(f"{datetime.now()} No new emails found.")
             close_connection(connection)
+            print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
         emails = pull_emails(connection, uids)
         if len(emails) == 0:
-            print("No emails to process.")
+            print(f"{datetime.now()} No emails to process.")
             close_connection(connection)
+            print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
         markdowned = parse_email(emails)
@@ -124,16 +129,17 @@ def refresh_mailbox(credentials: map) -> None:
         
         for uid in uids:
             if uid not in sent_uids:
-                print(f"Email with UID {uid} was not sent.")
+                print(f"{datetime.now()} Email with UID {uid} was not sent.")
                 connection.flag(uid, [MailMessageFlags.SEEN], False)
         close_connection(connection)
-        
+        print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
+        return
                
 def main():
     load_dotenv()
     mailbox_number = int(os.environ.get("MAILBOX_NUMBER"))
     if mailbox_number is None or mailbox_number <= 0:
-        print("Invalid mailbox number.")
+        print(f"{datetime.now()} Invalid mailbox number.")
         return
     
     credentials = []
@@ -149,7 +155,7 @@ def main():
     
     CREDENTIALS = (os.environ.get("ADDR"), os.environ.get("PASSWD"), os.environ.get("URL"))
     while True:
-        #sleep(600)
+        sleep(600)
         for id in range(mailbox_number):
             refresh_mailbox(credentials[id])
                   
