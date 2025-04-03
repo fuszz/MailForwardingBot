@@ -2,20 +2,20 @@ import os
 from typing import List, Mapping
 from time import sleep
 from dotenv import load_dotenv
-from imap_tools import MailBox, AND
+from imap_tools import MailBox, AND, MailMessageFlags
 from discord_webhook import DiscordWebhook
 
-load_dotenv()
 
-CREDENTIALS = (os.environ.get("ADDR"), os.environ.get("PASSWD"), os.environ.get("URL"))
 
-def establish_connection() -> MailBox | None: 
+
+def establish_connection(credentials: map) -> MailBox | None: 
     try:
-        connection = MailBox(CREDENTIALS[2]).login(CREDENTIALS[0], CREDENTIALS[1])
+        connection = MailBox(credentials["mail_url"]).login(credentials["address"], credentials["password"])
         return connection
     except Exception as e:
         print(f"Error establishing connection: {e}")
         return None
+ 
     
 def close_connection(connection: MailBox) -> bool:
     try:
@@ -24,16 +24,13 @@ def close_connection(connection: MailBox) -> bool:
     except Exception as e:
         print(f"Error closing connection: {e}")
         return False
+ 
         
-def new_emails_uids(connection: MailBox, last_received_uid: str) -> List[str]:
+def new_emails_uids(connection: MailBox) -> List[str]:
     new_mail_uids = []
-           
     
     try:
-        if last_received_uid:
-            connection.select("INBOX")
-            connection.search(AND(seen=False, int(uid)>int(last_received_uid)))
-        for msg in connection.fetch():
+        for msg in connection.fetch(AND(seen=False)):
             new_mail_uids.append(msg.uid)
             print(f"New email UID: {msg.uid}")
         return new_mail_uids
@@ -41,6 +38,7 @@ def new_emails_uids(connection: MailBox, last_received_uid: str) -> List[str]:
     except Exception as e:
         print(f"Error checking for new emails: {e}")
         return []
+
     
 def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
     pulled_emails = {}
@@ -63,6 +61,7 @@ def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
         print(f"Error pulling emails: {e}")
         return None
 
+
 def parse_email(email: Mapping) -> List[str]:
     markdowned = []
     
@@ -81,45 +80,79 @@ def parse_email(email: Mapping) -> List[str]:
         markdowned.append(markdowned_msg)
         #print(markdowned_msg)
     return markdowned
-    
-def send_to_discord(markdowned: List[str]) -> bool:
-    for mail in markdowned:
-        try:
-            webhook = DiscordWebhook(os.environ.get("WEBHOOK_URL"), content=mail)
-            response = webhook.execute()
-            print(f"Messages sent to Discord: {response.status_code}")
-            return True
-        
-        except Exception as e:
-            print(f"Error sending to Discord: {e}")
-            return False
 
     
-def main():
-    last_received_uid = None
-    while True:
-        connection = establish_connection()
+def send_to_discord(markdowned: List[str], uids: List[str], webhook_url: str) -> List[str]:
+    sent_uids = []
+    print(uids)
+    try:
+        for (uid, mail) in zip(uids, markdowned):
+            #print(uid)
+            #print(mail)
+            webhook = DiscordWebhook(webhook_url, content=mail)
+            response = webhook.execute()
+            sent_uids.append(uid)
+            print(f"Message {uid} sent to Discord: status code {response.status_code}")
+                
+    except Exception as e:
+        print(f"Error sending to Discord: {e}")
+    return sent_uids
+
+
+def refresh_mailbox(credentials: map) -> None:
+        connection = establish_connection(credentials)
         if not connection:
             print("Failed to establish connection.")
-            continue
+            return
         
-        uids = new_emails_uids(connection, last_received_uid)
+        uids = new_emails_uids(connection)
         if not uids:
             print("No new emails found.")
             close_connection(connection)
-            continue
+            return
         
         emails = pull_emails(connection, uids)
-        close_connection(connection)
         if len(emails) == 0:
             print("No emails to process.")
-            continue
+            close_connection(connection)
+            return
+        
         markdowned = parse_email(emails)
-
-        if not send_to_discord(markdowned):
-            print("Failed to send emails to Discord.")
-            continue
-        last_received_uid = uids[-1]
+        print(len(markdowned))
+        sent_uids = send_to_discord(markdowned, uids, credentials["webhook_url"])
+    
+        
+        for uid in uids:
+            if uid not in sent_uids:
+                print(f"Email with UID {uid} was not sent.")
+                connection.flag(uid, [MailMessageFlags.SEEN], False)
+        close_connection(connection)
+        
+               
+def main():
+    load_dotenv()
+    mailbox_number = int(os.environ.get("MAILBOX_NUMBER"))
+    if mailbox_number is None or mailbox_number <= 0:
+        print("Invalid mailbox number.")
+        return
+    
+    credentials = []
+                    
+    for i in range(mailbox_number):
+        mail_creds = {}
+        mail_creds["address"] = os.environ.get(f"ADDRESS_{i}")
+        mail_creds["password"] = os.environ.get(f"PASSWORD_{i}")
+        mail_creds["mail_url"] = os.environ.get(f"MAIL_URL_{i}")
+        mail_creds["webhook_url"] = os.environ.get(f"WEBHOOK_URL_{i}")
+        credentials.append(mail_creds)
+        
+    
+    CREDENTIALS = (os.environ.get("ADDR"), os.environ.get("PASSWD"), os.environ.get("URL"))
+    while True:
+        #sleep(600)
+        for id in range(mailbox_number):
+            refresh_mailbox(credentials[id])
+                  
 
 if __name__ == "__main__":
     main()
