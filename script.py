@@ -2,6 +2,7 @@ import os
 from typing import List, Mapping
 from time import sleep
 from datetime import datetime
+
 from dotenv import load_dotenv
 from imap_tools import MailBox, AND, MailMessageFlags
 from discord_webhook import DiscordWebhook
