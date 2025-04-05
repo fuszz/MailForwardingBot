@@ -2,7 +2,7 @@
 
 Simple script written due to n8n problems.
 
-## Installation
+## Manual installation
 ### Clone this repository
 1. Clone this repo and open it in console
 2. Modify `.env.example` as specified below
@@ -10,9 +10,6 @@ Simple script written due to n8n problems.
 ```
 pip install -r requirements.txt
 ```
-
-### Pull docker image from Dockerhub
-Docker image will be provided later
 
 ## `.env` file
 
@@ -33,3 +30,15 @@ Execute the following command
 python3 script.py
 ```
 
+## Docker compose installation
+1. Copy [docker-compose.yml](docker-compose.yml) file
+2. Create new directory for script, i. e. `mailbot` and enter it
+``` bash
+mkdir mailbot && cd mailbot
+```
+3. Copy `.env.example` file and edit it.
+4. Save edited file as `.env`
+5. Start container using
+``` bash
+docker compose up -d
+```
