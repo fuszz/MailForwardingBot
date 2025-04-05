@@ -162,6 +162,7 @@ def main():
     while True:
         for id in range(mailbox_number):
             refresh_mailbox(credentials[id])
+        print(f"{datetime.now()} Sleeping for 10 minutes.")
         sleep(600)
                   
 
