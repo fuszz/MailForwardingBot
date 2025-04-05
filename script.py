@@ -2,37 +2,45 @@ import os
 from typing import List, Mapping
 from time import sleep
 from datetime import datetime
+import signal
 
 from dotenv import load_dotenv
 from imap_tools import MailBox, AND, MailMessageFlags
 from discord_webhook import DiscordWebhook
 
 
+CONNECTION = None
+def signal_handler(sig, frame):
+    print(f"{datetime.now()} Exiting the script.")
+    if CONNECTION:
+        close_connection()
+    exit(0)
 
 
 def establish_connection(credentials: map) -> MailBox | None: 
     try:
-        connection = MailBox(credentials["mail_url"]).login(credentials["address"], credentials["password"])
-        return connection
+        CONNECTION = MailBox(credentials["mail_url"]).login(credentials["address"], credentials["password"])
+        return CONNECTION
     except Exception as e:
         print(f"{datetime.now()} Error establishing connection: {e}")
         return None
  
     
-def close_connection(connection: MailBox) -> bool:
+def close_connection() -> bool:
     try:
-        connection.logout()
+        CONNECTION.logout()
+        CONNECTION = None
         return True
     except Exception as e:
         print(f"{datetime.now()} Error closing connection: {e}")
         return False
  
         
-def new_emails_uids(connection: MailBox) -> List[str]:
+def new_emails_uids() -> List[str]:
     new_mail_uids = []
     
     try:
-        for msg in connection.fetch(AND(seen=False)):
+        for msg in CONNECTION.fetch(AND(seen=False)):
             new_mail_uids.append(msg.uid)
             print(f"{datetime.now()} New email UID: {msg.uid}")
         return new_mail_uids
@@ -42,11 +50,10 @@ def new_emails_uids(connection: MailBox) -> List[str]:
         return []
 
     
-def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
+def pull_emails(uids: List[str]) -> Mapping:
     pulled_emails = {}
-    print(uids)
     try:
-        for msg in connection.fetch(AND(uid=uids)):
+        for msg in CONNECTION.fetch(AND(uid=uids)):
             pulled_emails[msg.uid] = {
                 "subject": msg.subject,
                 "from": msg.from_,
@@ -80,17 +87,14 @@ def parse_email(email: Mapping) -> List[str]:
             markdowned_msg += f"### Ten email zawiera załączniki.\n"
             
         markdowned.append(markdowned_msg)
-        #print(markdowned_msg)
+
     return markdowned
 
     
 def send_to_discord(markdowned: List[str], uids: List[str], webhook_url: str) -> List[str]:
     sent_uids = []
-    print(uids)
     try:
         for (uid, mail) in zip(uids, markdowned):
-            #print(uid)
-            #print(mail)
             webhook = DiscordWebhook(webhook_url, content=mail)
             response = webhook.execute()
             sent_uids.append(uid)
@@ -103,23 +107,23 @@ def send_to_discord(markdowned: List[str], uids: List[str], webhook_url: str) ->
 
 def refresh_mailbox(credentials: map) -> None:
         print(f"\n\n{datetime.now()} Start processing mailbox {credentials["address"]}")
-        connection = establish_connection(credentials)
-        if not connection:
+        CONNECTION = establish_connection(credentials)
+        if not CONNECTION:
             print(f"{datetime.now()} Failed to establish connection.")
             print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
-        uids = new_emails_uids(connection)
+        uids = new_emails_uids()
         if not uids:
             print(f"{datetime.now()} No new emails found.")
-            close_connection(connection)
+            close_connection()
             print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
-        emails = pull_emails(connection, uids)
+        emails = pull_emails(uids)
         if len(emails) == 0:
             print(f"{datetime.now()} No emails to process.")
-            close_connection(connection)
+            close_connection()
             print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
@@ -131,19 +135,22 @@ def refresh_mailbox(credentials: map) -> None:
         for uid in uids:
             if uid not in sent_uids:
                 print(f"{datetime.now()} Email with UID {uid} was not sent.")
-                connection.flag(uid, [MailMessageFlags.SEEN], False)
-        close_connection(connection)
+                CONNECTION.flag(uid, [MailMessageFlags.SEEN], False)
+        close_connection(CONNECTION)
         print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
         return
                
 def main():
+    signal.signal(signal.SIGINT, signal_handler)
+
+    print(f"{datetime.now()} Starting the script.")
+    print(f"{datetime.now()} Loading environment variables.")
     if not load_dotenv():
         print(f"{datetime.now()} Failed to load environment variables.")
         print(f"{datetime.now()} Exting the script.")
         return   
 
     mailbox_number = int(os.environ.get("MAILBOX_NUMBER"))
-    print(mailbox_number)
     if mailbox_number is None or mailbox_number <= 0:
         print(f"{datetime.now()} Invalid mailbox number.")
         return

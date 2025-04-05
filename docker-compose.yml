@@ -2,5 +2,6 @@ services:
   mail-forwarding-bot:
     image: docker.io/fuszz/mail-forwarding-bot:latest
     container_name: mail-bot
+    user: "1000:1000"
     volumes:
-      - .env:/mailbot/.env
+      - ".env:/mailbot/.env"
