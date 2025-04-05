@@ -1,6 +1,7 @@
 # Mail to Discord messages forwarding
 
-Simple script written due to n8n problems.
+Simple script written due to n8n problems that monitors your mailboxes using the IMAP protocol. It connects to the mailbox, checks for new messages, and, if any are found, forwards them to a specified Discord webhook.
+By default, the interval between checks is 10 minutes, but this can be manually adjusted in the script.
 
 ## Manual installation
 ### Clone this repository
