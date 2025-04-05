@@ -137,7 +137,10 @@ def refresh_mailbox(credentials: map) -> None:
         return
                
 def main():
-    load_dotenv()
+    if not load_dotenv():
+        print(f"{datetime.now()} Failed to load environment variables.")
+        print(f"{datetime.now()} Exting the script.")
+        return   
     mailbox_number = int(os.environ.get("MAILBOX_NUMBER"))
     if mailbox_number is None or mailbox_number <= 0:
         print(f"{datetime.now()} Invalid mailbox number.")
