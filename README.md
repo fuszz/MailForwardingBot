@@ -36,7 +36,7 @@ python3 script.py
 ``` bash
 mkdir mailbot && cd mailbot
 ```
-3. Copy `.env.example` file and edit it.
+3. Copy (`.env.example`)[.env.example] file and edit it.
 4. Save edited file as `.env`
 5. Start container using
 ``` bash
