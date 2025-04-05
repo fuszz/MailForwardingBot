@@ -9,38 +9,29 @@ from imap_tools import MailBox, AND, MailMessageFlags
 from discord_webhook import DiscordWebhook
 
 
-CONNECTION = None
-def signal_handler(sig, frame):
-    print(f"{datetime.now()} Exiting the script.")
-    if CONNECTION:
-        close_connection()
-    exit(0)
-
-
 def establish_connection(credentials: map) -> MailBox | None: 
     try:
-        CONNECTION = MailBox(credentials["mail_url"]).login(credentials["address"], credentials["password"])
-        return CONNECTION
+        connection = MailBox(credentials["mail_url"]).login(credentials["address"], credentials["password"])
+        return connection
     except Exception as e:
         print(f"{datetime.now()} Error establishing connection: {e}")
         return None
  
     
-def close_connection() -> bool:
+def close_connection(connection) -> bool:
     try:
-        CONNECTION.logout()
-        CONNECTION = None
+        connection.logout()
         return True
     except Exception as e:
         print(f"{datetime.now()} Error closing connection: {e}")
         return False
  
         
-def new_emails_uids() -> List[str]:
+def new_emails_uids(connection: MailBox) -> List[str]:
     new_mail_uids = []
     
     try:
-        for msg in CONNECTION.fetch(AND(seen=False)):
+        for msg in connection.fetch(AND(seen=False)):
             new_mail_uids.append(msg.uid)
             print(f"{datetime.now()} New email UID: {msg.uid}")
         return new_mail_uids
@@ -50,10 +41,10 @@ def new_emails_uids() -> List[str]:
         return []
 
     
-def pull_emails(uids: List[str]) -> Mapping:
+def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
     pulled_emails = {}
     try:
-        for msg in CONNECTION.fetch(AND(uid=uids)):
+        for msg in connection.fetch(AND(uid=uids)):
             pulled_emails[msg.uid] = {
                 "subject": msg.subject,
                 "from": msg.from_,
@@ -106,43 +97,40 @@ def send_to_discord(markdowned: List[str], uids: List[str], webhook_url: str) ->
 
 
 def refresh_mailbox(credentials: map) -> None:
-        print(f"\n\n{datetime.now()} Start processing mailbox {credentials["address"]}")
-        CONNECTION = establish_connection(credentials)
-        if not CONNECTION:
+        print(f"{datetime.now()} Start processing mailbox {credentials["address"]}")
+        connection = establish_connection(credentials)
+        if not connection:
             print(f"{datetime.now()} Failed to establish connection.")
             print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
-        uids = new_emails_uids()
+        uids = new_emails_uids(connection)
         if not uids:
             print(f"{datetime.now()} No new emails found.")
-            close_connection()
+            close_connection(connection)
             print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
-        emails = pull_emails(uids)
+        emails = pull_emails(connection, uids)
         if len(emails) == 0:
             print(f"{datetime.now()} No emails to process.")
-            close_connection()
+            close_connection(connection)
             print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
             return
         
         markdowned = parse_email(emails)
-        print(len(markdowned))
         sent_uids = send_to_discord(markdowned, uids, credentials["webhook_url"])
     
         
         for uid in uids:
             if uid not in sent_uids:
                 print(f"{datetime.now()} Email with UID {uid} was not sent.")
-                CONNECTION.flag(uid, [MailMessageFlags.SEEN], False)
-        close_connection(CONNECTION)
+                connection.flag(uid, [MailMessageFlags.SEEN], False)
+        close_connection(connection)
         print(f"{datetime.now()} Stop processing mailbox {credentials["address"]}")
         return
                
 def main():
-    signal.signal(signal.SIGINT, signal_handler)
-
     print(f"{datetime.now()} Starting the script.")
     print(f"{datetime.now()} Loading environment variables.")
     if not load_dotenv():
