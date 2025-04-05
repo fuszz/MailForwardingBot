@@ -1,0 +1,6 @@
+services:
+  mail-forwarding-bot:
+    image: docker.io/fuszz/mail-forwarding-bot:latest
+    container_name: mail-bot
+    volumes:
+      - .env:/mailbot/.env

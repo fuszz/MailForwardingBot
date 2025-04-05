@@ -141,7 +141,9 @@ def main():
         print(f"{datetime.now()} Failed to load environment variables.")
         print(f"{datetime.now()} Exting the script.")
         return   
+
     mailbox_number = int(os.environ.get("MAILBOX_NUMBER"))
+    print(mailbox_number)
     if mailbox_number is None or mailbox_number <= 0:
         print(f"{datetime.now()} Invalid mailbox number.")
         return
@@ -154,14 +156,13 @@ def main():
         mail_creds["password"] = os.environ.get(f"PASSWORD_{i}")
         mail_creds["mail_url"] = os.environ.get(f"MAIL_URL_{i}")
         mail_creds["webhook_url"] = os.environ.get(f"WEBHOOK_URL_{i}")
-        credentials.append(mail_creds)
-        
-    
-    CREDENTIALS = (os.environ.get("ADDR"), os.environ.get("PASSWD"), os.environ.get("URL"))
+        credentials.append(mail_creds)    
+    print(f"{datetime.now()} Loaded environment variables.")
+
     while True:
-        sleep(600)
         for id in range(mailbox_number):
             refresh_mailbox(credentials[id])
+        sleep(600)
                   
 
 if __name__ == "__main__":
