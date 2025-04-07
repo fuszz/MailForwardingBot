@@ -1,3 +1,4 @@
 python-dotenv==1.0.1
 imap-tools==1.10.0
 discord-webhook==1.4.1
+html2text==2024.2.26

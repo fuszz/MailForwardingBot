@@ -2,8 +2,7 @@ import os
 from typing import List, Mapping
 from time import sleep
 from datetime import datetime
-import signal
-
+from html2text import HTML2Text
 from dotenv import load_dotenv
 from imap_tools import MailBox, AND, MailMessageFlags
 from discord_webhook import DiscordWebhook
@@ -52,7 +51,7 @@ def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
                 "cc": msg.cc,
                 "bcc": msg.bcc,
                 "date": msg.date,
-                "body": msg.text,
+                "body": msg.html,
                 "attachments": msg.attachments,
             }
         return pulled_emails
@@ -61,10 +60,15 @@ def pull_emails(connection: MailBox, uids: List[str]) -> Mapping:
         print(f"{datetime.now()} Error pulling emails: {e}")
         return None
 
+def parse_html_to_md(html: str) -> str:
+    html_to_md = HTML2Text()
+    html_to_md.body_width = 0
+    html_to_md.single_line_break = True
+    return html_to_md.handle(html)
 
 def parse_email(email: Mapping) -> List[str]:
+
     markdowned = []
-    
     for m in email.keys():
         markdowned_msg = "# Nowa wiadomość e-mail \n"
         markdowned_msg += f"## Temat: {email[m]['subject']}\n"
@@ -73,12 +77,12 @@ def parse_email(email: Mapping) -> List[str]:
         if 'CC' in email[m].keys(): markdowned_msg += f"## DW: {email[m]['cc']}\n"
         if 'BCC' in email[m].keys(): markdowned_msg += f"## Ukryte DW: {email[m]['bcc']}\n"
         markdowned_msg += f"## Data: {email[m]['date']}\n"
-        markdowned_msg += f"## Treść:\n {email[m]['body']}\n"
+        markdowned_msg += f"## Treść:\n" + parse_html_to_md(str(email[m]['body']))
         if len(email[m]['attachments']) > 0:
             markdowned_msg += f"### Ten email zawiera załączniki.\n"
-            
+            for a in email[m]['attachments']:
+                markdowned_msg += " - " + a.filename + " size: " + str(round(a.size / 1024, 2)) + "kB \n"
         markdowned.append(markdowned_msg)
-
     return markdowned
 
     
@@ -86,13 +90,14 @@ def send_to_discord(markdowned: List[str], uids: List[str], webhook_url: str) ->
     sent_uids = []
     try:
         for (uid, mail) in zip(uids, markdowned):
+            print("SEND: ",mail)
             webhook = DiscordWebhook(webhook_url, content=mail)
             response = webhook.execute()
             sent_uids.append(uid)
-            print(f"Message {uid} sent to Discord: status code {response.status_code}")
+            print(f"{datetime.now()} Message {uid} sent to Discord: status code {response.status_code}")
                 
     except Exception as e:
-        print(f"Error sending to Discord: {e}")
+        print(f"{datetime.now()} Error sending to Discord: {e}")
     return sent_uids
 
 
