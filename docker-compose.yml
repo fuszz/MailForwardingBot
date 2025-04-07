@@ -1,6 +1,6 @@
 services:
   mail-forwarding-bot:
-    image: ghcr.io/fuszz/mailforwardingbot:latest
+    image: ghcr.io/fuszz/mail-forwarding-bot:latest
     container_name: mail-bot
     user: "1000:1000"
     volumes:
